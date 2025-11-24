@@ -1,15 +1,23 @@
 // Currency Exchange Rate Service
-// Uses exchangerate.host (free, no API key required) or exchangerate-api.com (with API key)
+// Primary: Binance API (USDT/MMK trading pair - USDT is pegged to USD, so USDT price = USD price)
+// Fallback 1: exchangerate-api.com (if API key provided)
+// Fallback 2: exchangerate.host (free, no API key required)
 
 interface ExchangeRateResponse {
   success: boolean;
   rates?: {
     USD?: number;
+    MMK?: number;
   };
   conversion_rates?: {
     USD?: number;
   };
   error?: string;
+}
+
+interface BinanceResponse {
+  symbol: string;
+  price: string;
 }
 
 class CurrencyService {
@@ -30,30 +38,58 @@ class CurrencyService {
     try {
       let rate: number | null = null;
 
-      // Try exchangerate-api.com first if API key is provided
-      if (this.API_KEY) {
+      // Primary: Try Binance API (USDT/MMK pair) - FIRST PRIORITY
+      // USDT is pegged to USD, so USDT/MMK price gives us USD/MMK rate
+      try {
+        const response = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=USDTMMK');
+        
+        if (!response.ok) {
+          throw new Error(`Binance API returned ${response.status}`);
+        }
+        
+        const data: BinanceResponse = await response.json();
+        
+        if (data.price) {
+          const usdtToMmk = parseFloat(data.price);
+          if (usdtToMmk > 0 && !isNaN(usdtToMmk)) {
+            // Binance returns: 1 USDT = X MMK (where USDT ≈ USD)
+            // We need: 1 MMK = ? USD, which is 1 / X
+            rate = 1 / usdtToMmk;
+            console.log(`✓ Binance API success: 1 USDT = ${usdtToMmk.toLocaleString()} MMK, so 1 MMK = ${rate.toFixed(6)} USD`);
+          } else {
+            throw new Error('Invalid price from Binance API');
+          }
+        } else {
+          throw new Error('No price data from Binance API');
+        }
+      } catch (error) {
+        console.warn('⚠ Binance API failed, trying fallback:', error);
+      }
+
+      // Fallback 1: Try exchangerate-api.com if API key is provided
+      if (!rate && this.API_KEY) {
         try {
           const response = await fetch(
-            `https://v6.exchangerate-api.com/v6/${this.API_KEY}/pair/MMK/USD`
+            `https://v6.exchangerate-api.com/v6/${this.API_KEY}/pair/USD/MMK`
           );
           const data = await response.json();
           if (data.conversion_rate) {
-            rate = data.conversion_rate;
+            rate = 1 / data.conversion_rate;
           }
         } catch (error) {
-          console.warn('ExchangeRate-API failed, trying fallback:', error);
+          console.warn('ExchangeRate-API failed, trying next fallback:', error);
         }
       }
 
-      // Fallback to exchangerate.host (free, no API key)
+      // Fallback 2: exchangerate.host (free, no API key)
       if (!rate) {
-        const response = await fetch('https://api.exchangerate.host/latest?base=MMK&symbols=USD');
+        const response = await fetch('https://api.exchangerate.host/latest?base=USD&symbols=MMK');
         const data: ExchangeRateResponse = await response.json();
         
-        if (data.success && data.rates?.USD) {
-          rate = data.rates.USD;
+        if (data.success && data.rates?.MMK) {
+          rate = 1 / data.rates.MMK;
         } else {
-          throw new Error('Failed to fetch exchange rate');
+          throw new Error('Failed to fetch exchange rate from all sources');
         }
       }
 
@@ -86,16 +122,20 @@ class CurrencyService {
         }
       }
 
-      // Fallback to approximate rate if all else fails (as of 2024, ~2100 MMK = 1 USD)
-      const fallbackRate = 2100;
-      console.warn(`Using fallback exchange rate: 1 USD = ${fallbackRate} MMK`);
+      // Fallback to approximate rate if all else fails (current rate: 1 USD = 4010 MMK)
+      // So 1 MMK = 1/4010 = 0.000249 USD
+      const fallbackRate = 1 / 4010; // This is "1 MMK = X USD" format
+      console.warn(`Using fallback exchange rate: 1 USD = 4010 MMK (1 MMK = ${fallbackRate.toFixed(6)} USD)`);
       return fallbackRate;
     }
   }
 
   // Convert MMK to USD
+  // Note: fetchExchangeRate returns the rate as "1 MMK = X USD" (a small number like 0.000476)
+  // So to convert: MMK amount * rate = USD amount
   async convertToUSD(mmkAmount: number): Promise<number> {
     const rate = await this.fetchExchangeRate();
+    // Rate is already in "1 MMK = X USD" format, so multiply
     return mmkAmount * rate;
   }
 

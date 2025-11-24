@@ -1618,12 +1618,12 @@ const MainAppShell = ({
             <button 
               onClick={() => setCurrency(currency === 'MMK' ? 'USD' : 'MMK')} 
               className="flex-1 flex items-center justify-center gap-2 px-2 py-2 bg-slate-800/50 hover:bg-slate-800 rounded-lg text-slate-300 transition-colors border border-slate-700"
-              title={exchangeRate ? `1 USD = ${(1/exchangeRate).toLocaleString()} MMK` : 'Loading exchange rate...'}
+              title={exchangeRate ? `1 USD = ${Math.round(1/exchangeRate).toLocaleString()} MMK` : 'Loading exchange rate...'}
             >
                {currency === 'MMK' ? <Coins size={14} /> : <DollarSign size={14} />}
                <span className="text-xs font-bold">{currency}</span>
                {exchangeRate && currency === 'USD' && (
-                 <span className="text-[10px] text-slate-500">({(1/exchangeRate).toLocaleString()} MMK/$)</span>
+                 <span className="text-[10px] text-slate-500">({Math.round(1/exchangeRate).toLocaleString()} MMK/$)</span>
                )}
             </button>
           </div>
