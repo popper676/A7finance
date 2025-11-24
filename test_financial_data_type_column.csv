@@ -1,0 +1,23 @@
+Transaction Date,Memo,Type,Amount,Category
+2024-01-15,Sales from Customer A,Income,5000000,Sales
+2024-01-20,Product Sales,Income,3000000,Sales
+2024-01-25,Monthly Office Rent,Expense,800000,Rent
+2024-01-28,Staff Salaries,Expense,2000000,Salaries
+2024-01-30,Inventory Purchase,Expense,1500000,COGS
+2024-02-10,Sales Revenue,Income,6000000,Sales
+2024-02-15,Service Fees,Income,2500000,Services
+2024-02-20,Electricity Bill,Expense,300000,Utilities
+2024-02-25,Advertising Campaign,Expense,500000,Marketing
+2024-02-28,Stock Purchase,Expense,1800000,COGS
+2024-03-05,Customer Payment,Income,7000000,Sales
+2024-03-12,Product Sales,Income,4000000,Sales
+2024-03-18,Office Rent Payment,Expense,800000,Rent
+2024-03-22,Monthly Salaries,Expense,2000000,Salaries
+2024-03-25,Delivery Costs,Expense,200000,Transport
+2024-03-30,Inventory Cost,Expense,2000000,COGS
+2024-04-08,Sales Income,Income,5500000,Sales
+2024-04-15,Service Revenue,Income,3000000,Services
+2024-04-20,Rent Payment,Expense,800000,Rent
+2024-04-25,Employee Wages,Expense,2000000,Salaries
+2024-04-28,Product Cost,Expense,1700000,COGS
+

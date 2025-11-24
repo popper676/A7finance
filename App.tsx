@@ -188,7 +188,20 @@ interface FinancialData {
   netProfit: number;
   category?: string;
   rawDate?: string; // For sorting YYYY-MM
-  rawRow?: any;
+  rawRow?: any; // Original row data with original column names
+}
+
+interface ColumnMapping {
+  originalHeaders: string[];
+  mapping: {
+    date: string | null;
+    description: string | null;
+    category: string | null;
+    revenue: string | null;
+    expense: string | null;
+    cogs: string | null;
+  };
+  strategy: string;
 }
 
 // --- STRICT MATHEMATICAL MOCK DATA ---
@@ -907,7 +920,7 @@ const AnalyticsView = ({ data, rawData, lang, currency }: { data: FinancialData[
 };
 
 // --- COMPONENT: DATA TABLE VIEW ---
-const DataTableView = ({ data, currency }: { data: FinancialData[], currency: Currency }) => {
+const DataTableView = ({ data, currency, columnMapping }: { data: FinancialData[], currency: Currency, columnMapping: ColumnMapping | null }) => {
   return (
     <div className="space-y-6 animate-fadeInUp pb-10 max-w-7xl mx-auto">
       <div className="flex items-center justify-between">
@@ -920,16 +933,107 @@ const DataTableView = ({ data, currency }: { data: FinancialData[], currency: Cu
          </div>
       </div>
 
+      {/* Column Mapping Info */}
+      {columnMapping && (
+        <div className="bg-slate-900 rounded-xl border border-slate-800 p-4">
+          <h3 className="text-sm font-bold text-slate-300 mb-3 flex items-center gap-2">
+            <TableIcon size={16} /> Original Column Mapping from Your File
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+            {columnMapping.mapping.date && (
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500">Date:</span>
+                <span className="text-cyan-400 font-mono">{columnMapping.mapping.date}</span>
+              </div>
+            )}
+            {columnMapping.mapping.description && (
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500">Description:</span>
+                <span className="text-cyan-400 font-mono">{columnMapping.mapping.description}</span>
+              </div>
+            )}
+            {columnMapping.mapping.category && (
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500">Category:</span>
+                <span className="text-cyan-400 font-mono">{columnMapping.mapping.category}</span>
+              </div>
+            )}
+            {columnMapping.mapping.revenue && (
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500">Revenue:</span>
+                <span className="text-emerald-400 font-mono">{columnMapping.mapping.revenue}</span>
+              </div>
+            )}
+            {columnMapping.mapping.expense && (
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500">Expense:</span>
+                <span className="text-rose-400 font-mono">{columnMapping.mapping.expense}</span>
+              </div>
+            )}
+            {columnMapping.mapping.cogs && (
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500">COGS:</span>
+                <span className="text-amber-400 font-mono">{columnMapping.mapping.cogs}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <span className="text-slate-500">Strategy:</span>
+              <span className="text-purple-400 font-mono">{columnMapping.strategy}</span>
+            </div>
+          </div>
+          <div className="mt-3 pt-3 border-t border-slate-800">
+            <p className="text-xs text-slate-500">
+              All Original Columns: <span className="text-slate-400 font-mono">{columnMapping.originalHeaders.join(', ')}</span>
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="bg-slate-950 text-slate-400 font-medium border-b border-slate-800 uppercase tracking-wider text-xs">
               <tr>
-                <th className="px-6 py-4">Date</th>
-                <th className="px-6 py-4">Description</th>
-                <th className="px-6 py-4">Category</th>
-                <th className="px-6 py-4 text-right text-emerald-500">Revenue</th>
-                <th className="px-6 py-4 text-right text-rose-500">Expense</th>
+                <th className="px-6 py-4">
+                  Date
+                  {columnMapping?.mapping.date && (
+                    <span className="block text-[10px] text-slate-500 font-normal normal-case mt-1">
+                      ({columnMapping.mapping.date})
+                    </span>
+                  )}
+                </th>
+                <th className="px-6 py-4">
+                  Description
+                  {columnMapping?.mapping.description && (
+                    <span className="block text-[10px] text-slate-500 font-normal normal-case mt-1">
+                      ({columnMapping.mapping.description})
+                    </span>
+                  )}
+                </th>
+                <th className="px-6 py-4">
+                  Category
+                  {columnMapping?.mapping.category && (
+                    <span className="block text-[10px] text-slate-500 font-normal normal-case mt-1">
+                      ({columnMapping.mapping.category})
+                    </span>
+                  )}
+                </th>
+                <th className="px-6 py-4 text-right text-emerald-500">
+                  Revenue
+                  {columnMapping?.mapping.revenue && (
+                    <span className="block text-[10px] text-slate-500 font-normal normal-case mt-1">
+                      ({columnMapping.mapping.revenue})
+                    </span>
+                  )}
+                </th>
+                <th className="px-6 py-4 text-right text-rose-500">
+                  Expense
+                  {columnMapping?.mapping.expense && (
+                    <span className="block text-[10px] text-slate-500 font-normal normal-case mt-1">
+                      ({columnMapping.mapping.expense})
+                    </span>
+                  )}
+                </th>
                 <th className="px-6 py-4 text-right text-indigo-400">Net Profit</th>
               </tr>
             </thead>
@@ -1566,7 +1670,8 @@ const MainAppShell = ({
   currency, 
   setCurrency, 
   apiKey,
-  exchangeRate
+  exchangeRate,
+  columnMapping
 }: { 
   data: FinancialData[], 
   onReset: () => void, 
@@ -1575,7 +1680,8 @@ const MainAppShell = ({
   currency: Currency, 
   setCurrency: (c: Currency) => void, 
   apiKey: string,
-  exchangeRate: number | null
+  exchangeRate: number | null,
+  columnMapping: ColumnMapping | null
 }) => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -1660,7 +1766,7 @@ const MainAppShell = ({
           {activeTab === 'analytics' && <AnalyticsView data={aggregatedData} rawData={data} lang={lang} currency={currency} />}
           
           {/* Data View uses RAW data */}
-          {activeTab === 'dataview' && <DataTableView data={data} currency={currency} />}
+          {activeTab === 'dataview' && <DataTableView data={data} currency={currency} columnMapping={columnMapping} />}
 
           {/* Chat uses AGGREGATED data context so it understands monthly performance, not just transactions */}
           {activeTab === 'chat' && <AIChatView data={aggregatedData} lang={lang} currency={currency} apiKey={apiKey} />}
@@ -1680,6 +1786,7 @@ export default function App() {
   const [currency, setCurrency] = useState<Currency>('MMK');
   const [exchangeRate, setExchangeRate] = useState<number | null>(null);
   const [isLoadingRate, setIsLoadingRate] = useState(true);
+  const [columnMapping, setColumnMapping] = useState<ColumnMapping | null>(null);
   
   // Initialize key STRICTLY from Environment Variables
   const apiKey = useMemo(() => getEnvApiKey(), []);
@@ -1818,6 +1925,22 @@ export default function App() {
       const config = JSON.parse(response.choices[0].message.content || "{}");
       console.log("AI Strategy Config:", config);
 
+      // Store column mapping for display
+      const mapping: ColumnMapping = {
+        originalHeaders: headers,
+        mapping: {
+          date: config.date_col || null,
+          description: config.description_col || null,
+          category: config.category_col || null,
+          revenue: config.revenue_col || config.amount_col || null,
+          expense: config.expense_col || config.amount_col || null,
+          cogs: config.cogs_col || null,
+        },
+        strategy: config.strategy || 'unknown'
+      };
+      setColumnMapping(mapping);
+      console.log("Column Mapping:", mapping);
+
       // 4. APPLY STRATEGY TO PARSE DATA
       const parsedData = jsonData.map((row: any) => {
         let revenue = 0;
@@ -1922,7 +2045,7 @@ export default function App() {
     <div className="text-slate-200 font-sans antialiased">
       {appState === 'UPLOAD' && <SmartUploadView onFileDrop={handleFileDrop} onSkip={handleSkip} lang={language} apiKey={apiKey} />}
       {appState === 'ANALYZING' && <AnalyzingView lang={language} />}
-      {appState === 'DASHBOARD' && <MainAppShell data={financialData} onReset={handleReset} lang={language} setLang={setLanguage} currency={currency} setCurrency={setCurrency} apiKey={apiKey} exchangeRate={exchangeRate} />}
+      {appState === 'DASHBOARD' && <MainAppShell data={financialData} onReset={handleReset} lang={language} setLang={setLanguage} currency={currency} setCurrency={setCurrency} apiKey={apiKey} exchangeRate={exchangeRate} columnMapping={columnMapping} />}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Padauk:wght@400;700&display=swap');
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }

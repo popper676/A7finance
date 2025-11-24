@@ -1,0 +1,25 @@
+Header Row 1 (ignore this)
+Header Row 2 (ignore this)
+Date Column,Transaction Details,Type of Transaction,Income,Expenditure,Cost of Sales
+2024-01-15,Sales from Customer A,Revenue,5000000,0,0
+2024-01-20,Product Sales Transaction,Revenue,3000000,0,0
+2024-01-25,Monthly Office Rent Payment,Expense,0,800000,0
+2024-01-28,Staff Salaries Payment,Expense,0,2000000,0
+2024-01-30,Inventory Purchase for Sales,COGS,0,0,1500000
+2024-02-10,Sales Revenue Collection,Revenue,6000000,0,0
+2024-02-15,Service Fees Received,Revenue,2500000,0,0
+2024-02-20,Electricity Bill Payment,Expense,0,300000,0
+2024-02-25,Advertising Campaign Cost,Expense,0,500000,0
+2024-02-28,Stock Purchase for Inventory,COGS,0,0,1800000
+2024-03-05,Customer Payment Received,Revenue,7000000,0,0
+2024-03-12,Product Sales Income,Revenue,4000000,0,0
+2024-03-18,Office Rent Monthly Payment,Expense,0,800000,0
+2024-03-22,Monthly Salaries Payment,Expense,0,2000000,0
+2024-03-25,Delivery and Transportation,Expense,0,200000,0
+2024-03-30,Inventory Cost of Sales,COGS,0,0,2000000
+2024-04-08,Sales Income Collection,Revenue,5500000,0,0
+2024-04-15,Service Revenue Received,Revenue,3000000,0,0
+2024-04-20,Rent Payment Made,Expense,0,800000,0
+2024-04-25,Employee Wages Payment,Expense,0,2000000,0
+2024-04-28,Product Cost Purchase,COGS,0,0,1700000
+

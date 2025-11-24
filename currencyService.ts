@@ -54,20 +54,22 @@ class CurrencyService {
         }
       }
 
-      // Fallback 1: exchangerate.host (free, no API key) - Works from browser
+      // Fallback 1: Free exchange rate API (no API key required)
       if (!rate) {
         try {
-          const response = await fetch('https://api.exchangerate.host/latest?base=USD&symbols=MMK');
-          const data: ExchangeRateResponse = await response.json();
+          // Use exchangerate-api.com free v4 endpoint (no key needed, more reliable)
+          const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+          const data = await response.json();
           
-          if (data.success && data.rates?.MMK) {
+          if (data.rates && data.rates.MMK && typeof data.rates.MMK === 'number') {
             rate = 1 / data.rates.MMK;
-            console.log(`✓ Using exchangerate.host: 1 USD = ${data.rates.MMK.toLocaleString()} MMK`);
+            console.log(`✓ Using exchangerate-api.com (free v4): 1 USD = ${data.rates.MMK.toLocaleString()} MMK`);
           } else {
-            throw new Error('exchangerate.host returned invalid data');
+            throw new Error('Invalid MMK rate in response');
           }
         } catch (error: any) {
-          console.warn('⚠ exchangerate.host failed:', error.message || error);
+          console.warn('⚠ Free exchange rate API failed:', error.message || error);
+          // Will fall through to Binance or use fallback rate
         }
       }
 

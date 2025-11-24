@@ -1,0 +1,23 @@
+Date,Transaction Description,Category,Income Amount,Expense Amount,COGS
+2024-01-15,Sales Revenue,Revenue,5000000,0,0
+2024-01-20,Product Sales,Revenue,3000000,0,0
+2024-01-25,Office Rent,Operating Expense,0,800000,0
+2024-01-28,Employee Salaries,Operating Expense,0,2000000,0
+2024-01-30,Cost of Goods Sold,COGS,0,0,1500000
+2024-02-10,Sales Revenue,Revenue,6000000,0,0
+2024-02-15,Service Income,Revenue,2500000,0,0
+2024-02-20,Utilities,Operating Expense,0,300000,0
+2024-02-25,Marketing Expenses,Operating Expense,0,500000,0
+2024-02-28,Cost of Goods Sold,COGS,0,0,1800000
+2024-03-05,Sales Revenue,Revenue,7000000,0,0
+2024-03-12,Product Sales,Revenue,4000000,0,0
+2024-03-18,Office Rent,Operating Expense,0,800000,0
+2024-03-22,Employee Salaries,Operating Expense,0,2000000,0
+2024-03-25,Transportation,Operating Expense,0,200000,0
+2024-03-30,Cost of Goods Sold,COGS,0,0,2000000
+2024-04-08,Sales Revenue,Revenue,5500000,0,0
+2024-04-15,Service Income,Revenue,3000000,0,0
+2024-04-20,Office Rent,Operating Expense,0,800000,0
+2024-04-25,Employee Salaries,Operating Expense,0,2000000,0
+2024-04-28,Cost of Goods Sold,COGS,0,0,1700000
+
