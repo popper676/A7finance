@@ -1,7 +1,7 @@
 // Currency Exchange Rate Service
-// Primary: Binance API (USDT/MMK trading pair - USDT is pegged to USD, so USDT price = USD price)
-// Fallback 1: exchangerate-api.com (if API key provided)
-// Fallback 2: exchangerate.host (free, no API key required)
+// Primary: exchangerate-api.com (if API key provided) - Most reliable
+// Fallback 1: exchangerate.host (free, no API key required) - Works from browser
+// Fallback 2: Binance API (USDT/MMK) - May be blocked in some regions like Malaysia
 
 interface ExchangeRateResponse {
   success: boolean;
@@ -24,7 +24,7 @@ class CurrencyService {
   private exchangeRate: number | null = null;
   private lastFetchTime: number = 0;
   private readonly CACHE_DURATION = 60 * 60 * 1000; // 1 hour cache
-  private readonly API_KEY = import.meta.env.VITE_EXCHANGE_RATE_API_KEY || '';
+  private readonly API_KEY = (import.meta as any).env?.VITE_EXCHANGE_RATE_API_KEY || '';
 
   // Fetch exchange rate from API
   async fetchExchangeRate(): Promise<number> {
@@ -38,36 +38,8 @@ class CurrencyService {
     try {
       let rate: number | null = null;
 
-      // Primary: Try Binance API (USDT/MMK pair) - FIRST PRIORITY
-      // USDT is pegged to USD, so USDT/MMK price gives us USD/MMK rate
-      try {
-        const response = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=USDTMMK');
-        
-        if (!response.ok) {
-          throw new Error(`Binance API returned ${response.status}`);
-        }
-        
-        const data: BinanceResponse = await response.json();
-        
-        if (data.price) {
-          const usdtToMmk = parseFloat(data.price);
-          if (usdtToMmk > 0 && !isNaN(usdtToMmk)) {
-            // Binance returns: 1 USDT = X MMK (where USDT ≈ USD)
-            // We need: 1 MMK = ? USD, which is 1 / X
-            rate = 1 / usdtToMmk;
-            console.log(`✓ Binance API success: 1 USDT = ${usdtToMmk.toLocaleString()} MMK, so 1 MMK = ${rate.toFixed(6)} USD`);
-          } else {
-            throw new Error('Invalid price from Binance API');
-          }
-        } else {
-          throw new Error('No price data from Binance API');
-        }
-      } catch (error) {
-        console.warn('⚠ Binance API failed, trying fallback:', error);
-      }
-
-      // Fallback 1: Try exchangerate-api.com if API key is provided
-      if (!rate && this.API_KEY) {
+      // Primary: Try exchangerate-api.com if API key is provided (Most reliable)
+      if (this.API_KEY) {
         try {
           const response = await fetch(
             `https://v6.exchangerate-api.com/v6/${this.API_KEY}/pair/USD/MMK`
@@ -75,22 +47,74 @@ class CurrencyService {
           const data = await response.json();
           if (data.conversion_rate) {
             rate = 1 / data.conversion_rate;
+            console.log(`✓ Using exchangerate-api.com: 1 USD = ${(1/rate).toLocaleString()} MMK`);
           }
-        } catch (error) {
-          console.warn('ExchangeRate-API failed, trying next fallback:', error);
+        } catch (error: any) {
+          console.warn('⚠ exchangerate-api.com failed, trying fallback:', error.message || error);
         }
       }
 
-      // Fallback 2: exchangerate.host (free, no API key)
+      // Fallback 1: exchangerate.host (free, no API key) - Works from browser
       if (!rate) {
-        const response = await fetch('https://api.exchangerate.host/latest?base=USD&symbols=MMK');
-        const data: ExchangeRateResponse = await response.json();
-        
-        if (data.success && data.rates?.MMK) {
-          rate = 1 / data.rates.MMK;
-        } else {
-          throw new Error('Failed to fetch exchange rate from all sources');
+        try {
+          const response = await fetch('https://api.exchangerate.host/latest?base=USD&symbols=MMK');
+          const data: ExchangeRateResponse = await response.json();
+          
+          if (data.success && data.rates?.MMK) {
+            rate = 1 / data.rates.MMK;
+            console.log(`✓ Using exchangerate.host: 1 USD = ${data.rates.MMK.toLocaleString()} MMK`);
+          } else {
+            throw new Error('exchangerate.host returned invalid data');
+          }
+        } catch (error: any) {
+          console.warn('⚠ exchangerate.host failed:', error.message || error);
         }
+      }
+
+      // Fallback 2: Try Binance API (USDT/MMK pair) - May be blocked in some regions
+      // USDT is pegged to USD, so USDT/MMK price gives us USD/MMK rate
+      if (!rate) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout (faster fail)
+          
+          const response = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=USDTMMK', {
+            signal: controller.signal,
+            mode: 'cors'
+          });
+          
+          clearTimeout(timeoutId);
+          
+          if (!response.ok) {
+            throw new Error(`Binance API returned ${response.status}`);
+          }
+          
+          const data: BinanceResponse = await response.json();
+          
+          if (data.price) {
+            const usdtToMmk = parseFloat(data.price);
+            if (usdtToMmk > 0 && !isNaN(usdtToMmk)) {
+              rate = 1 / usdtToMmk;
+              console.log(`✓ Using Binance API: 1 USDT = ${usdtToMmk.toLocaleString()} MMK`);
+            } else {
+              throw new Error('Invalid price from Binance API');
+            }
+          } else {
+            throw new Error('No price data from Binance API');
+          }
+        } catch (error: any) {
+          // Binance may be blocked in some regions (e.g., Malaysia), so we silently fail
+          if (error.name === 'AbortError') {
+            console.warn('⚠ Binance API timeout (may be blocked in your region)');
+          } else {
+            console.warn('⚠ Binance API failed (may be blocked):', error.message || error);
+          }
+        }
+      }
+
+      // If all APIs failed, throw error to use fallback rate
+      if (!rate) {
+        throw new Error('Failed to fetch exchange rate from all sources');
       }
 
       if (!rate || rate <= 0) {
