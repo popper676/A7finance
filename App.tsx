@@ -42,7 +42,10 @@ import {
   EyeOff,
   LogOut,
   ShieldCheck,
-  Lock
+  Lock,
+  Filter,
+  Calendar,
+  ChevronDown
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -947,57 +950,437 @@ const DataTableView = ({ data, currency }: { data: FinancialData[], currency: Cu
 }
 
 // --- DASHBOARD VIEW (SUMMARY) ---
+type QuickFilter = 'thisMonth' | 'lastMonth' | 'last3Months' | 'last6Months' | 'thisYear' | 'allTime' | 'custom';
+
 const DashboardView = ({ data, rawData, lang, currency, apiKey }: { data: FinancialData[], rawData: FinancialData[], lang: Language, currency: Currency, apiKey: string }) => {
   const t = TRANSLATIONS[lang];
   
-  // 1. Determine Current Month Data for Top Cards
-  const sortedData = useMemo(() => {
-    return [...data].sort((a, b) => {
-       if (a.rawDate && b.rawDate) return a.rawDate.localeCompare(b.rawDate);
-       return 0;
+  // Month Filter State
+  const [selectedQuickFilter, setSelectedQuickFilter] = useState<QuickFilter>('allTime');
+  const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
+  const [showMonthSelector, setShowMonthSelector] = useState(false);
+  const currentYear = new Date().getFullYear();
+  const [startDate, setStartDate] = useState(`${currentYear}-01-01`);
+  const [endDate, setEndDate] = useState(`${currentYear}-12-31`);
+
+  // Get unique months from data
+  const availableMonths = useMemo(() => {
+    const months = new Set(data.map(item => item.month));
+    return Array.from(months).sort((a, b) => {
+      const monthOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return monthOrder.indexOf(a) - monthOrder.indexOf(b);
     });
   }, [data]);
 
-  const currentMonth = sortedData[sortedData.length - 1] || { revenue: 0, cogs: 0, grossProfit: 0, expenses: 0, netProfit: 0, month: 'N/A' };
-  const prevMonth = sortedData[sortedData.length - 2] || { revenue: 0, cogs: 0, expenses: 0, netProfit: 0 };
+  // Helper to parse month name to date
+  const getMonthDate = (monthName: string, year: number) => {
+    const monthIndex = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(monthName);
+    if (monthIndex === -1) return new Date(year, 0, 1);
+    return new Date(year, monthIndex, 15);
+  };
 
-  // Strict Calculation Variables for Current Month
-  const curRevenue = currentMonth.revenue;
-  const curTotalExpenses = currentMonth.cogs + currentMonth.expenses;
-  const curNetProfit = currentMonth.netProfit;
+  // Helper functions for quick filters
+  const applyQuickFilter = (filter: QuickFilter) => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    
+    let start: Date;
+    let end: Date = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999);
+
+    switch (filter) {
+      case 'thisMonth':
+        start = new Date(currentYear, currentMonth, 1);
+        end = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999);
+        break;
+      case 'lastMonth':
+        start = new Date(currentYear, currentMonth - 1, 1);
+        end = new Date(currentYear, currentMonth, 0, 23, 59, 59, 999);
+        break;
+      case 'last3Months':
+        start = new Date(currentYear, currentMonth - 3, 1);
+        end = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999);
+        break;
+      case 'last6Months':
+        start = new Date(currentYear, currentMonth - 6, 1);
+        end = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999);
+        break;
+      case 'thisYear':
+        start = new Date(currentYear, 0, 1);
+        end = new Date(currentYear, 11, 31, 23, 59, 59, 999);
+        break;
+      case 'allTime':
+        if (data.length === 0) {
+          start = new Date(currentYear, 0, 1);
+          end = new Date(currentYear, 11, 31, 23, 59, 59, 999);
+        } else {
+          const allDates = data.map(item => {
+            if (item.rawDate) {
+              const [year, month] = item.rawDate.split('-');
+              return new Date(parseInt(year), parseInt(month) - 1, 15);
+            }
+            return getMonthDate(item.month, currentYear);
+          });
+          start = new Date(Math.min(...allDates.map(d => d.getTime())));
+          end = new Date(Math.max(...allDates.map(d => d.getTime())));
+          end.setHours(23, 59, 59, 999);
+        }
+        break;
+      default:
+        return;
+    }
+
+    setStartDate(start.toISOString().split('T')[0]);
+    setEndDate(end.toISOString().split('T')[0]);
+    setSelectedQuickFilter(filter);
+  };
+
+  // Initialize with allTime filter
+  useEffect(() => {
+    applyQuickFilter('allTime');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Filter Data based on Date Range or Selected Months
+  const filteredData = useMemo(() => {
+    // If specific months are selected, filter by month names
+    if (selectedMonths.length > 0) {
+      return data.filter(item => selectedMonths.includes(item.month));
+    }
+
+    // Otherwise, use date range filter
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+
+    return data.filter(item => {
+      let itemDate: Date;
+      if (item.rawDate) {
+        const [year, month] = item.rawDate.split('-');
+        itemDate = new Date(parseInt(year), parseInt(month) - 1, 15);
+      } else {
+        itemDate = getMonthDate(item.month, currentYear);
+      }
+      return itemDate >= start && itemDate <= end;
+    });
+  }, [data, startDate, endDate, currentYear, selectedMonths]);
+
+  // Handle month selection
+  const handleMonthToggle = (month: string) => {
+    setSelectedMonths(prev => {
+      if (prev.includes(month)) {
+        const newSelection = prev.filter(m => m !== month);
+        if (newSelection.length === 0) {
+          setSelectedQuickFilter('custom');
+        }
+        return newSelection;
+      } else {
+        setSelectedQuickFilter('custom');
+        return [...prev, month];
+      }
+    });
+  };
+
+  // Close month selector when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (showMonthSelector && !target.closest('.month-selector-container')) {
+        setShowMonthSelector(false);
+      }
+    };
+
+    if (showMonthSelector) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showMonthSelector]);
+
+  // Calculate aggregated totals for filtered period
+  const aggregatedStats = useMemo(() => {
+    if (filteredData.length === 0) {
+      return {
+        totalRevenue: 0,
+        totalExpenses: 0,
+        totalNetProfit: 0,
+        totalCogs: 0,
+        totalGrossProfit: 0,
+        periodLabel: 'No Data',
+        monthCount: 0
+      };
+    }
+
+    const totals = filteredData.reduce((acc, item) => ({
+      totalRevenue: acc.totalRevenue + item.revenue,
+      totalExpenses: acc.totalExpenses + item.expenses,
+      totalNetProfit: acc.totalNetProfit + item.netProfit,
+      totalCogs: acc.totalCogs + item.cogs,
+      totalGrossProfit: acc.totalGrossProfit + item.grossProfit,
+    }), {
+      totalRevenue: 0,
+      totalExpenses: 0,
+      totalNetProfit: 0,
+      totalCogs: 0,
+      totalGrossProfit: 0,
+    });
+
+    // Determine period label
+    const sortedData = [...filteredData].sort((a, b) => {
+      if (a.rawDate && b.rawDate) return a.rawDate.localeCompare(b.rawDate);
+      return 0;
+    });
+    
+    let periodLabel = '';
+    if (selectedMonths.length > 0) {
+      if (selectedMonths.length === 1) {
+        periodLabel = selectedMonths[0];
+      } else {
+        periodLabel = `${selectedMonths[0]} - ${selectedMonths[selectedMonths.length - 1]}`;
+      }
+    } else if (filteredData.length === 1) {
+      periodLabel = sortedData[0].month;
+    } else {
+      const firstMonth = sortedData[0].month;
+      const lastMonth = sortedData[sortedData.length - 1].month;
+      periodLabel = `${firstMonth} - ${lastMonth}`;
+    }
+
+    return {
+      ...totals,
+      periodLabel,
+      monthCount: filteredData.length
+    };
+  }, [filteredData, selectedMonths]);
+
+  // For comparison (previous period) - get data before the filtered period
+  const prevPeriodStats = useMemo(() => {
+    if (filteredData.length === 0) {
+      return { totalExpenses: 0 };
+    }
+
+    const sortedData = [...data].sort((a, b) => {
+      if (a.rawDate && b.rawDate) return a.rawDate.localeCompare(b.rawDate);
+      return 0;
+    });
+
+    // Get the date range of filtered data
+    const filteredSorted = [...filteredData].sort((a, b) => {
+      if (a.rawDate && b.rawDate) return a.rawDate.localeCompare(b.rawDate);
+      return 0;
+    });
+
+    if (filteredSorted.length === 0) {
+      return { totalExpenses: 0 };
+    }
+
+    const firstFilteredDate = filteredSorted[0].rawDate || filteredSorted[0].month;
+    const monthCount = filteredData.length;
+
+    // Find the month(s) before the filtered period
+    const prevData: FinancialData[] = [];
+    for (let i = sortedData.length - 1; i >= 0; i--) {
+      const item = sortedData[i];
+      const itemDate = item.rawDate || item.month;
+      
+      if (itemDate < firstFilteredDate) {
+        prevData.unshift(item);
+        if (prevData.length >= monthCount) break;
+      }
+    }
+
+    const prevTotalExpenses = prevData.reduce((sum, item) => sum + item.cogs + item.expenses, 0);
+    return { totalExpenses: prevTotalExpenses };
+  }, [filteredData, data]);
+
+  // Strict Calculation Variables for Filtered Period
+  const curRevenue = aggregatedStats.totalRevenue;
+  const curTotalExpenses = aggregatedStats.totalCogs + aggregatedStats.totalExpenses;
+  const curNetProfit = aggregatedStats.totalNetProfit;
 
   // Metrics for "Big 5"
   const liquidityRatio = curTotalExpenses > 0 ? (curRevenue / curTotalExpenses).toFixed(2) : 'N/A';
-  const prevTotalExpenses = prevMonth.cogs + prevMonth.expenses;
+  const prevTotalExpenses = prevPeriodStats.totalExpenses;
   const expenseGrowth = prevTotalExpenses > 0 
       ? Math.round(((curTotalExpenses - prevTotalExpenses) / prevTotalExpenses) * 100) 
       : 0;
   
-  const grossMargin = curRevenue ? ((currentMonth.grossProfit / curRevenue) * 100).toFixed(1) : '0.0';
+  const grossMargin = curRevenue ? ((aggregatedStats.totalGrossProfit / curRevenue) * 100).toFixed(1) : '0.0';
   const netMargin = curRevenue ? ((curNetProfit / curRevenue) * 100).toFixed(1) : '0.0';
 
   // Summary object for AI Context
   const overallStats = {
-     "Current Month": currentMonth.month,
+     "Period": aggregatedStats.periodLabel,
      "Revenue": formatCurrency(curRevenue, currency),
      "Total Expenses": formatCurrency(curTotalExpenses, currency),
      "Net Profit": formatCurrency(curNetProfit, currency),
-     "Margin": netMargin + "%"
+     "Margin": netMargin + "%",
+     "Month Count": aggregatedStats.monthCount.toString()
   };
 
   return (
     <div className="space-y-8 animate-fadeInUp pb-10 max-w-7xl mx-auto">
       
-      {/* SECTION 1: CURRENT MONTH OVERVIEW (Top Row) */}
+      {/* Month Filter Section */}
+      <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 shadow-sm space-y-4">
+        {/* Quick Filter Buttons */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 text-slate-300 font-medium min-w-fit">
+            <Filter size={18} className="text-emerald-400" />
+            <span className="text-sm">လပိုင်းရွေးချယ်ရန် (Quick Filter):</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { key: 'thisMonth', label: 'ယခုလ (This Month)' },
+              { key: 'lastMonth', label: 'ယခင်လ (Last Month)' },
+              { key: 'last3Months', label: 'နောက်ဆုံး ၃ လ (Last 3 Months)' },
+              { key: 'last6Months', label: 'နောက်ဆုံး ၆ လ (Last 6 Months)' },
+              { key: 'thisYear', label: 'ယခုနှစ် (This Year)' },
+              { key: 'allTime', label: 'အားလုံး (All Time)' }
+            ].map(filter => (
+              <button
+                key={filter.key}
+                onClick={() => {
+                  applyQuickFilter(filter.key as QuickFilter);
+                  setSelectedMonths([]);
+                }}
+                className={`
+                  px-3 py-1.5 text-xs font-medium rounded-lg transition-colors
+                  ${selectedQuickFilter === filter.key && selectedMonths.length === 0
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
+                  }
+                `}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Month Selector */}
+        {availableMonths.length > 0 && (
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 text-slate-300 font-medium text-sm">
+              <Calendar size={16} className="text-emerald-400" />
+              <span>လများကို ရွေးချယ်ရန် (Select Months):</span>
+            </div>
+            <div className="relative month-selector-container">
+              <button
+                onClick={() => setShowMonthSelector(!showMonthSelector)}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm border border-slate-700 rounded-lg hover:bg-slate-800 text-slate-300 bg-slate-800"
+              >
+                <span>{selectedMonths.length > 0 ? `${selectedMonths.length} လရွေးထားသည်` : 'လများရွေးချယ်ရန်'}</span>
+                <ChevronDown size={16} className={`transition-transform ${showMonthSelector ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {showMonthSelector && (
+                <div className="absolute top-full left-0 mt-2 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-10 p-3 min-w-[200px]">
+                  <div className="grid grid-cols-3 gap-2">
+                    {availableMonths.map(month => (
+                      <button
+                        key={month}
+                        onClick={() => handleMonthToggle(month)}
+                        className={`
+                          px-3 py-1.5 text-xs font-medium rounded transition-colors
+                          ${selectedMonths.includes(month)
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                          }
+                        `}
+                      >
+                        {month}
+                      </button>
+                    ))}
+                  </div>
+                  {selectedMonths.length > 0 && (
+                    <button
+                      onClick={() => {
+                        setSelectedMonths([]);
+                        setSelectedQuickFilter('custom');
+                      }}
+                      className="mt-3 w-full px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200 border border-slate-700 rounded hover:bg-slate-700"
+                    >
+                      ရှင်းလင်းရန် (Clear)
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+            {selectedMonths.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {selectedMonths.map(month => (
+                  <span
+                    key={month}
+                    className="px-2 py-1 bg-emerald-600/20 text-emerald-400 text-xs rounded-full flex items-center gap-1 border border-emerald-600/30"
+                  >
+                    {month}
+                    <button
+                      onClick={() => handleMonthToggle(month)}
+                      className="hover:text-emerald-300"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Custom Date Range (shown when custom is selected) */}
+        {(selectedQuickFilter === 'custom' || selectedMonths.length === 0) && (
+          <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-700">
+            <div className="flex items-center gap-2 text-slate-300 font-medium text-sm min-w-fit">
+              <Calendar size={16} className="text-slate-500" />
+              <span>ရက်စွဲအကွာအဝေး (Custom Date Range):</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative flex-1 sm:flex-none">
+                <input 
+                  type="date" 
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    setSelectedQuickFilter('custom');
+                    setSelectedMonths([]);
+                  }}
+                  className="w-full sm:w-auto pl-10 pr-4 py-2 border border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-300 text-sm bg-slate-800"
+                />
+                <Calendar className="absolute left-3 top-2.5 text-slate-500" size={16} />
+              </div>
+              <span className="text-slate-500 font-medium">-</span>
+              <div className="relative flex-1 sm:flex-none">
+                <input 
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => {
+                    setEndDate(e.target.value);
+                    setSelectedQuickFilter('custom');
+                    setSelectedMonths([]);
+                  }}
+                  className="w-full sm:w-auto pl-10 pr-4 py-2 border border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-300 text-sm bg-slate-800"
+                />
+                <Calendar className="absolute left-3 top-2.5 text-slate-500" size={16} />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+      
+      {/* SECTION 1: FILTERED PERIOD OVERVIEW (Top Row) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Revenue */}
         <div className="bg-gradient-to-br from-slate-900 to-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden group">
            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
               <DollarSign size={64} className="text-blue-500" />
            </div>
-           <p className="text-slate-400 text-sm font-medium mb-2 font-padauk uppercase tracking-wider">Current Month Revenue</p>
+           <p className="text-slate-400 text-sm font-medium mb-2 font-padauk uppercase tracking-wider">
+             {aggregatedStats.monthCount === 1 ? 'Period Revenue' : 'Total Revenue'}
+           </p>
            <h3 className="text-3xl font-bold text-white mb-1">{formatCurrency(curRevenue, currency)}</h3>
-           <p className="text-xs text-slate-500">{currentMonth.month}</p>
+           <p className="text-xs text-slate-500">
+             {aggregatedStats.periodLabel} {aggregatedStats.monthCount > 1 && `(${aggregatedStats.monthCount} months)`}
+           </p>
         </div>
 
         {/* Total Expenses (Calculated as COGS + OpEx) */}
@@ -1005,7 +1388,9 @@ const DashboardView = ({ data, rawData, lang, currency, apiKey }: { data: Financ
            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
               <ArrowRight size={64} className="text-rose-500 rotate-45" />
            </div>
-           <p className="text-slate-400 text-sm font-medium mb-2 font-padauk uppercase tracking-wider">Total Expenses</p>
+           <p className="text-slate-400 text-sm font-medium mb-2 font-padauk uppercase tracking-wider">
+             {aggregatedStats.monthCount === 1 ? 'Period Expenses' : 'Total Expenses'}
+           </p>
            <h3 className="text-3xl font-bold text-rose-400 mb-1">{formatCurrency(curTotalExpenses, currency)}</h3>
            <p className="text-xs text-rose-500/60">Includes COGS & OpEx</p>
         </div>
@@ -1015,7 +1400,9 @@ const DashboardView = ({ data, rawData, lang, currency, apiKey }: { data: Financ
            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
               <Target size={64} className="text-emerald-500" />
            </div>
-           <p className="text-slate-400 text-sm font-medium mb-2 font-padauk uppercase tracking-wider">Net Profit</p>
+           <p className="text-slate-400 text-sm font-medium mb-2 font-padauk uppercase tracking-wider">
+             {aggregatedStats.monthCount === 1 ? 'Period Profit' : 'Total Net Profit'}
+           </p>
            <h3 className="text-3xl font-bold text-emerald-400 mb-1">{formatCurrency(curNetProfit, currency)}</h3>
            <p className="text-xs text-emerald-500/60">Strict Calc: Rev - Total Exp</p>
         </div>
@@ -1076,9 +1463,9 @@ const DashboardView = ({ data, rawData, lang, currency, apiKey }: { data: Financ
                   <Layers size={16} />
                   <span className="text-xs font-bold uppercase">OpEx Only</span>
                </div>
-               <div className="text-xl font-bold text-amber-400">{formatCurrency(currentMonth.expenses, currency)}</div>
+               <div className="text-xl font-bold text-amber-400">{formatCurrency(aggregatedStats.totalExpenses, currency)}</div>
                <div className="text-[10px] text-slate-500">Excludes COGS</div>
-            </div>
+             </div>
 
          </div>
       </div>
@@ -1088,14 +1475,15 @@ const DashboardView = ({ data, rawData, lang, currency, apiKey }: { data: Financ
         
         {/* AI Insight Card */}
         <div className="lg:col-span-3 h-auto">
-           <AiInsight data={data} lang={lang} currency={currency} summary={overallStats} apiKey={apiKey} />
+           <AiInsight data={filteredData} lang={lang} currency={currency} summary={overallStats} apiKey={apiKey} />
         </div>
 
         <div className="lg:col-span-2 bg-slate-900 rounded-2xl p-6 border border-slate-800">
           <h3 className="font-bold text-xl text-slate-100 mb-6 flex items-center gap-2 font-padauk"><BarChart3 className="text-slate-500" size={20} /> {t.revVsExp}</h3>
           <div className="h-[350px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data} barGap={8}>
+            {filteredData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={filteredData} barGap={8}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                 <XAxis dataKey="month" stroke="#64748b" axisLine={false} tickLine={false} dy={10} />
                 {/* Ensure exact formatting */}
@@ -1111,6 +1499,11 @@ const DashboardView = ({ data, rawData, lang, currency, apiKey }: { data: Financ
                 <Bar name="Expenses" dataKey="expenses" fill="#ef4444" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-slate-500">
+                ရွေးချယ်ထားသော ရက်စွဲအတွင်း အချက်အလက်မရှိပါ (No data found)
+              </div>
+            )}
           </div>
         </div>
         
@@ -1118,8 +1511,9 @@ const DashboardView = ({ data, rawData, lang, currency, apiKey }: { data: Financ
         <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800">
           <h3 className="font-bold text-xl text-slate-100 mb-2 flex items-center gap-2 font-padauk"><Target className="text-slate-500" size={20} /> {t.growthTraj}</h3>
           <div className="h-[350px]">
-            <ResponsiveContainer width="100%" height="100%">
-               <ReLineChart data={data}>
+            {filteredData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+               <ReLineChart data={filteredData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                   <XAxis dataKey="month" stroke="#64748b" axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#fff' }} formatter={(val: number) => formatCurrency(val, currency)} />
@@ -1127,6 +1521,11 @@ const DashboardView = ({ data, rawData, lang, currency, apiKey }: { data: Financ
                   <Line type="monotone" dataKey="netProfit" stroke="#10b981" strokeWidth={3} dot={false} />
                </ReLineChart>
             </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-slate-500">
+                ရွေးချယ်ထားသော ရက်စွဲအတွင်း အချက်အလက်မရှိပါ (No data found)
+              </div>
+            )}
           </div>
           <div className="mt-4 p-3 bg-slate-800/50 rounded-lg text-xs text-slate-400">
              <span className="text-blue-400 font-bold">Blue: Revenue</span> | <span className="text-emerald-400 font-bold">Green: Net Profit</span>
