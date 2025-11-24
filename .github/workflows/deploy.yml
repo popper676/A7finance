@@ -3,6 +3,7 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
+      - master
       - main
   workflow_dispatch:
 
@@ -34,9 +35,9 @@ jobs:
       - name: Build with API Key
         env:
           # Inject secret as VITE_ variable for import.meta.env usage
-          VITE_OPENAI_API_KEY: ${{ secrets.OPENAIAPI }}
+          VITE_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           # Inject secret as standard variable for vite config define usage
-          OPENAIAPI: ${{ secrets.OPENAIAPI }}
+          OPENAIAPI: ${{ secrets.OPENAI_API_KEY }}
         run: npm run build
 
       - name: Setup Pages
