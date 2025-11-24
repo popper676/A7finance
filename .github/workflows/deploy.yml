@@ -35,9 +35,9 @@ jobs:
       - name: Build with API Key
         env:
           # Inject secret as VITE_ variable for import.meta.env usage
-          VITE_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          VITE_OPENAI_API_KEY: ${{ secrets.OPENAIAPI }}
           # Inject secret as standard variable for vite config define usage
-          OPENAIAPI: ${{ secrets.OPENAI_API_KEY }}
+          OPENAIAPI: ${{ secrets.OPENAIAPI }}
         run: npm run build
 
       - name: Setup Pages
