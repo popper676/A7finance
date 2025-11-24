@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { currencyService } from './currencyService';
 import { 
   LayoutDashboard, 
   MessageSquare, 
@@ -237,21 +238,36 @@ const ANALYSIS_STEPS = [
   "Calculating Profit Margins..."
 ];
 
-// Helper to format currency
+// Global exchange rate (updated when fetched)
+let globalExchangeRate: number | null = null;
+
+// Helper to convert MMK to USD
+const convertToUSD = (mmkValue: number, rate: number | null): number => {
+  if (!rate) return mmkValue; // Fallback to MMK if rate not available
+  return mmkValue * rate;
+};
+
+// Helper to format currency (uses global exchange rate)
 const formatCurrency = (val: number, currency: Currency, compact: boolean = false) => {
+  // Convert MMK to USD if needed
+  let displayValue = val;
+  if (currency === 'USD' && globalExchangeRate) {
+    displayValue = convertToUSD(val, globalExchangeRate);
+  }
+  
   const prefix = currency === 'USD' ? '$' : '';
   const suffix = currency === 'MMK' ? ' MMK' : '';
   
   if (compact) {
-    let formatted = val.toString();
-    if (Math.abs(val) >= 1000000000) formatted = `${(val / 1000000000).toFixed(2)}B`;
-    else if (Math.abs(val) >= 1000000) formatted = `${(val / 1000000).toFixed(1)}M`;
-    else if (Math.abs(val) >= 1000) formatted = `${(val / 1000).toFixed(1)}K`;
-    else formatted = val.toLocaleString();
+    let formatted = displayValue.toString();
+    if (Math.abs(displayValue) >= 1000000000) formatted = `${(displayValue / 1000000000).toFixed(2)}B`;
+    else if (Math.abs(displayValue) >= 1000000) formatted = `${(displayValue / 1000000).toFixed(1)}M`;
+    else if (Math.abs(displayValue) >= 1000) formatted = `${(displayValue / 1000).toFixed(1)}K`;
+    else formatted = displayValue.toLocaleString();
     return `${prefix}${formatted}${suffix}`;
   }
 
-  return `${prefix}${val.toLocaleString()}${suffix}`;
+  return `${prefix}${displayValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${suffix}`;
 };
 
 // --- ROBUST PARSING HELPERS ---
@@ -1549,7 +1565,8 @@ const MainAppShell = ({
   setLang, 
   currency, 
   setCurrency, 
-  apiKey
+  apiKey,
+  exchangeRate
 }: { 
   data: FinancialData[], 
   onReset: () => void, 
@@ -1557,7 +1574,8 @@ const MainAppShell = ({
   setLang: (l: Language) => void, 
   currency: Currency, 
   setCurrency: (c: Currency) => void, 
-  apiKey: string
+  apiKey: string,
+  exchangeRate: number | null
 }) => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -1597,9 +1615,16 @@ const MainAppShell = ({
                <Globe size={14} />
                <span className="text-xs font-bold">{lang === 'en' ? 'ENG' : 'MYA'}</span>
             </button>
-            <button onClick={() => setCurrency(currency === 'MMK' ? 'USD' : 'MMK')} className="flex-1 flex items-center justify-center gap-2 px-2 py-2 bg-slate-800/50 hover:bg-slate-800 rounded-lg text-slate-300 transition-colors border border-slate-700">
+            <button 
+              onClick={() => setCurrency(currency === 'MMK' ? 'USD' : 'MMK')} 
+              className="flex-1 flex items-center justify-center gap-2 px-2 py-2 bg-slate-800/50 hover:bg-slate-800 rounded-lg text-slate-300 transition-colors border border-slate-700"
+              title={exchangeRate ? `1 USD = ${(1/exchangeRate).toLocaleString()} MMK` : 'Loading exchange rate...'}
+            >
                {currency === 'MMK' ? <Coins size={14} /> : <DollarSign size={14} />}
                <span className="text-xs font-bold">{currency}</span>
+               {exchangeRate && currency === 'USD' && (
+                 <span className="text-[10px] text-slate-500">({(1/exchangeRate).toLocaleString()} MMK/$)</span>
+               )}
             </button>
           </div>
 
@@ -1653,9 +1678,38 @@ export default function App() {
   const [financialData, setFinancialData] = useState<FinancialData[]>(MOCK_FINANCIAL_DATA);
   const [language, setLanguage] = useState<Language>('en');
   const [currency, setCurrency] = useState<Currency>('MMK');
+  const [exchangeRate, setExchangeRate] = useState<number | null>(null);
+  const [isLoadingRate, setIsLoadingRate] = useState(true);
   
   // Initialize key STRICTLY from Environment Variables
   const apiKey = useMemo(() => getEnvApiKey(), []);
+  
+  // Fetch exchange rate on mount
+  useEffect(() => {
+    const fetchRate = async () => {
+      try {
+        setIsLoadingRate(true);
+        const rate = await currencyService.fetchExchangeRate();
+        setExchangeRate(rate);
+        // Update global rate for formatCurrency function
+        globalExchangeRate = rate;
+      } catch (error) {
+        console.error('Failed to fetch exchange rate:', error);
+        // Use fallback rate
+        const fallbackRate = 2100;
+        setExchangeRate(fallbackRate);
+        globalExchangeRate = fallbackRate;
+      } finally {
+        setIsLoadingRate(false);
+      }
+    };
+
+    fetchRate();
+    
+    // Refresh rate every hour
+    const interval = setInterval(fetchRate, 60 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
   
   // App always starts at 'UPLOAD' (or Dashboard if mock data desired)
   const [appState, setAppState] = useState<AppState>('UPLOAD');
@@ -1868,7 +1922,7 @@ export default function App() {
     <div className="text-slate-200 font-sans antialiased">
       {appState === 'UPLOAD' && <SmartUploadView onFileDrop={handleFileDrop} onSkip={handleSkip} lang={language} apiKey={apiKey} />}
       {appState === 'ANALYZING' && <AnalyzingView lang={language} />}
-      {appState === 'DASHBOARD' && <MainAppShell data={financialData} onReset={handleReset} lang={language} setLang={setLanguage} currency={currency} setCurrency={setCurrency} apiKey={apiKey} />}
+      {appState === 'DASHBOARD' && <MainAppShell data={financialData} onReset={handleReset} lang={language} setLang={setLanguage} currency={currency} setCurrency={setCurrency} apiKey={apiKey} exchangeRate={exchangeRate} />}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Padauk:wght@400;700&display=swap');
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
