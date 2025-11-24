@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
   return {
-    base: '/newA7finance/', // Configure base path for GitHub Pages
+    base: '/', // Use root path for Vercel (GitHub Pages can override if needed)
     plugins: [react()],
     define: {
       // Polyfill process.env.OPENAIAPI to support existing App.tsx logic
